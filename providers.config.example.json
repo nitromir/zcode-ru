@@ -1,0 +1,159 @@
+{
+  "format": 1,
+  "purpose": "Справочный конфиг маршрутизации облачных API ZCode 3.9.2. Не копировать поверх рабочего config.json без проверки.",
+  "secretsOmitted": [
+    "apiKey",
+    "OAuth tokens",
+    "telemetry headers",
+    "OAuth client identifiers"
+  ],
+  "builtInRouting": {
+    "zcode": {
+      "production": {
+        "origin": "https://zcode.z.ai",
+        "apiBaseUrl": "https://zcode.z.ai/api/v1",
+        "remoteUrl": "https://zcode.z.ai/remote/v4",
+        "webRemoteCallbackUrl": "https://zcode.z.ai/web-remote/callback",
+        "relayWebSocket": "wss://zcode.z.ai/ws"
+      },
+      "test": {
+        "origin": "https://zcode.chatglm.site",
+        "apiBaseUrl": "https://zcode.chatglm.site/api/v1",
+        "remoteUrl": "https://zcode.chatglm.site/remote/v4",
+        "webRemoteCallbackUrl": "https://zcode.chatglm.site/web-remote/callback",
+        "relayWebSocket": "wss://zcode.chatglm.site/ws"
+      }
+    },
+    "bigmodel": {
+      "productionOrigin": "https://bigmodel.cn",
+      "testOrigin": "https://dev.bigmodel.cn",
+      "openAiCompatibleApi": "https://open.bigmodel.cn",
+      "anthropicApi": "https://open.bigmodel.cn/api/anthropic"
+    },
+    "zai": {
+      "productionOAuthOrigin": "https://chat.z.ai",
+      "testOAuthOrigin": "https://zai-test.chatglm.site",
+      "productionBusinessApi": "https://api.z.ai",
+      "testBusinessApi": "https://api.chatglm.site",
+      "anthropicApi": "https://api.z.ai/api/anthropic"
+    },
+    "telemetry": {
+      "provider": "Alibaba Cloud ARMS / OpenTelemetry",
+      "note": "Build contains ARMS telemetry endpoints. Project-specific URLs and headers are intentionally not exported here."
+    }
+  },
+  "currentMachineProviderSnapshot": {
+    "providerFamilyDomain": "zai",
+    "enabledBuiltinAgentCliProviders": [
+      "glm"
+    ],
+    "providers": [
+      {
+        "id": "builtin:bigmodel",
+        "name": "Bigmodel - API Key",
+        "kind": "anthropic",
+        "enabled": false,
+        "baseURL": "https://open.bigmodel.cn/api/anthropic",
+        "models": [
+          "GLM-5.3",
+          "GLM-5.3-Flash",
+          "GLM-5.2",
+          "GLM-5-Turbo"
+        ],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "builtin:zai",
+        "name": "Z.ai - API Key",
+        "kind": "anthropic",
+        "baseURL": "https://api.z.ai/api/anthropic",
+        "models": [
+          "GLM-5.3",
+          "GLM-5.3-Flash",
+          "GLM-5.2",
+          "GLM-5-Turbo"
+        ],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "builtin:bigmodel-coding-plan",
+        "name": "BigModel - Coding Plan",
+        "kind": "anthropic",
+        "enabled": false,
+        "baseURL": "https://open.bigmodel.cn/api/anthropic",
+        "models": [
+          "GLM-5.3",
+          "GLM-5.3-Flash",
+          "GLM-5.2",
+          "GLM-5-Turbo"
+        ],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "builtin:bigmodel-start-plan",
+        "name": "BigModel - Coding Plan",
+        "kind": "anthropic",
+        "enabled": false,
+        "baseURL": "https://zcode.z.ai/api/v1/zcode-plan/anthropic",
+        "models": [],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "builtin:zai-coding-plan",
+        "name": "Z.ai - Coding Plan",
+        "kind": "anthropic",
+        "baseURL": "https://api.z.ai/api/anthropic",
+        "models": [
+          "GLM-5.3",
+          "GLM-5.3-Flash",
+          "GLM-5.2",
+          "GLM-5-Turbo"
+        ],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "builtin:zai-start-plan",
+        "name": "Z.ai - Coding Plan",
+        "kind": "anthropic",
+        "baseURL": "https://zcode.z.ai/api/v1/zcode-plan/anthropic",
+        "models": [],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      },
+      {
+        "id": "custom:tokenrouter",
+        "name": "tokenrouter",
+        "kind": "openai-compatible",
+        "baseURL": "https://api.tokenrouter.com/v1",
+        "models": [
+          "z-ai/glm-5.3-flash",
+          "z-ai/glm-5.3",
+          "qwen/qwen3.8-max-free",
+          "qwen/qwen3.8-flash"
+        ],
+        "apiKey": "__SET_ON_TARGET_MACHINE__"
+      }
+    ]
+  },
+  "environmentOverrides": [
+    "ZCODE_ENV",
+    "ZCODE_BASE_URL",
+    "ZCODE_ENDPOINT_ORIGIN",
+    "ZCODE_PRODUCTION_BASE_URL",
+    "ZCODE_TEST_BASE_URL",
+    "BIGMODEL_API_BASE_URL",
+    "BIGMODEL_PRODUCTION_API_BASE_URL",
+    "BIGMODEL_TEST_API_BASE_URL",
+    "ZAI_OAUTH_ORIGIN",
+    "ZAI_PRODUCTION_OAUTH_ORIGIN",
+    "ZAI_TEST_OAUTH_ORIGIN",
+    "ZAI_BUSINESS_BASE_URL",
+    "ZAI_PRODUCTION_BUSINESS_BASE_URL",
+    "ZAI_TEST_BUSINESS_BASE_URL"
+  ],
+  "notForExport": [
+    "C:/Users/<user>/.zcode/v2/credentials.json",
+    "API keys",
+    "OAuth tokens",
+    "OTEL_EXPORTER_OTLP_HEADERS"
+  ]
+}
