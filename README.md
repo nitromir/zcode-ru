@@ -2,12 +2,25 @@
 
 [![Windows](https://img.shields.io/badge/Platform-Windows%20x64-blue.svg)](https://github.com/nitromir/zcode-ru)
 [![ZCode Version](https://img.shields.io/badge/ZCode-3.10.x%20%7C%203.9.x-green.svg)](https://github.com/nitromir/zcode-ru/releases)
+[![Download Latest](https://img.shields.io/badge/Скачать-ZCode--RU--Setup.exe-brightgreen?logo=windows&style=for-the-badge)](https://github.com/nitromir/zcode-ru/releases/download/v3.10.1/ZCode-RU-Setup.exe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Демонстрация%20работы-red?logo=youtube)](https://youtu.be/TYX-9iIvH2U)
 
 Автоматический русификатор для IDE/ассистента **ZCode** с графическим инсталлятором, чистой базой английского языка (без остатков китайских иероглифов) и **пожизненной защитой от слёта при обновлениях программы и перезагрузке Windows**.
 
 Протестировано и стабильно работает на **Windows 10 / 11 x64**.
+
+---
+
+## ⚡ Быстрое скачивание (1-Click Installer)
+
+<div align="center">
+
+# 👉 [📥 СКАЧАТЬ ИНСТАЛЛЯТОР: ZCode-RU-Setup.exe](https://github.com/nitromir/zcode-ru/releases/download/v3.10.1/ZCode-RU-Setup.exe) 👈
+
+*Автономный установщик (.exe) для Windows x64 • Размер: ~1.6 МБ • Не требует дополнительных программ*
+
+</div>
 
 ---
 
