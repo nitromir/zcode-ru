@@ -11,6 +11,14 @@ if (-not (Test-Path $csc)) {
 }
 if (-not $csc) { throw "C# compiler csc.exe not found." }
 
+$sevenZip = (Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
+if (-not $sevenZip) {
+  foreach ($candidate in @('C:\Program Files\7-Zip\7z.exe', 'C:\Program Files (x86)\7-Zip\7z.exe')) {
+    if (Test-Path -LiteralPath $candidate) { $sevenZip = $candidate; break }
+  }
+}
+if (-not $sevenZip) { throw "7z.exe not found." }
+
 # 1. Install dependencies if node_modules missing
 Push-Location $repoRoot
 try {
@@ -24,8 +32,8 @@ try {
   if (Test-Path $payloadZip) { Remove-Item $payloadZip -Force }
 
   Write-Host "Creating payload zip..."
-  $filesToPack = @("ru.json", "patch.mjs", "patch-zcode-language.ps1", "zcode-autopatch.ps1", "zcode-watcher.ps1", "package.json", "package-lock.json", "node_modules")
-  7z a -tzip $payloadZip $filesToPack -r | Out-Null
+  $filesToPack = @("ru.json", "patch.mjs", "patch-zcode-language.ps1", "providers.config.example.json", "package.json", "package-lock.json", "node_modules")
+  & $sevenZip a -tzip $payloadZip $filesToPack -r | Out-Null
 
   # 3. Compile C# GUI executable
   $csFile = Join-Path $scriptRoot "ZCodeRUSetup.cs"
@@ -43,6 +51,11 @@ try {
     "/out:$outFile" $csFile
 
   if ($LASTEXITCODE -ne 0) { throw "Compilation failed." }
+
+  $portableZip = Join-Path $binDir "ZCode-RU-Portable.zip"
+  if (Test-Path -LiteralPath $portableZip) { Remove-Item -LiteralPath $portableZip -Force }
+  Write-Host "Creating $portableZip..."
+  & $sevenZip a -tzip $portableZip (@("README.md", "LICENSE") + $filesToPack) -r | Out-Null
 
   # Cleanup temporary payload zip
   Remove-Item $payloadZip -Force -ErrorAction SilentlyContinue

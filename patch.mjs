@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 
@@ -59,6 +60,75 @@ try {
 
 const log = (...a) => console.log('[patch]', ...a);
 
+function collectUnpackedPaths(entry, prefix = '', out = []) {
+  if (entry?.unpacked) out.push(prefix);
+  for (const [name, child] of Object.entries(entry?.files || {})) {
+    collectUnpackedPaths(child, prefix ? `${prefix}/${name}` : name, out);
+  }
+  return out;
+}
+
+function sha256File(filePath) {
+  const hash = createHash('sha256');
+  const fd = fs.openSync(filePath, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let bytesRead;
+    do {
+      bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (bytesRead) hash.update(buffer.subarray(0, bytesRead));
+    } while (bytesRead);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest('hex');
+}
+
+function uniquePath(basePath) {
+  let candidate = basePath;
+  let index = 2;
+  while (fs.existsSync(candidate)) candidate = basePath + '.' + index++;
+  return candidate;
+}
+
+function buildPackageStreams(rootDir, unpackedPaths) {
+  const streams = [];
+  const isUnpacked = relativePath => {
+    for (const unpackedPath of unpackedPaths) {
+      if (relativePath === unpackedPath || relativePath.startsWith(unpackedPath + '/')) return true;
+    }
+    return false;
+  };
+  const walk = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name);
+      const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join('/');
+      if (entry.isDirectory()) {
+        streams.push({ path: relativePath, type: 'directory', unpacked: isUnpacked(relativePath) });
+        walk(absolutePath);
+      } else if (entry.isSymbolicLink()) {
+        streams.push({
+          path: relativePath,
+          type: 'link',
+          unpacked: isUnpacked(relativePath),
+          symlink: fs.readlinkSync(absolutePath)
+        });
+      } else {
+        const stat = fs.statSync(absolutePath);
+        streams.push({
+          path: relativePath,
+          type: 'file',
+          unpacked: isUnpacked(relativePath),
+          stat,
+          streamGenerator: () => fs.createReadStream(absolutePath)
+        });
+      }
+    }
+  };
+  walk(rootDir);
+  return streams;
+}
+
 if (!fs.existsSync(asarPath)) {
   console.error('ERROR: app.asar not found at:', asarPath);
   process.exit(1);
@@ -91,11 +161,17 @@ function checkIsPatched() {
       try {
         const buf = asar.extractFile(asarPath, p);
         const text = buf.toString('utf8');
-        return text.includes('en-US":R') || text.includes('en-US": R') || text.includes('"settings.locale.en-US":`Русский`');
-      } catch {}
+        if (text.includes(',,R=')) {
+          throw new Error('Legacy broken patch detected. Revert app.asar before applying a new patch.');
+        }
+        return text.includes('"settings.locale.en-US":`Русский`');
+      } catch (err) {
+        if (err?.message?.startsWith('Legacy broken patch')) throw err;
+      }
     }
     return false;
   } catch (err) {
+    if (err?.message?.startsWith('Legacy broken patch')) throw err;
     return false;
   }
 }
@@ -122,18 +198,8 @@ if (!fs.existsSync(dictPath)) {
 const ruDict = JSON.parse(fs.readFileSync(dictPath, 'utf8'));
 log('Dictionary loaded:', Object.keys(ruDict).length, 'keys');
 
-// Create backup if not exists or if pristine asar is needed
-if (!fs.existsSync(backupPath)) {
-  fs.copyFileSync(asarPath, backupPath);
-  log('Created backup:', backupPath);
-}
-
 const unpackedDir = asarPath + '.unpacked';
 const backupUnpackedDir = backupPath + '.unpacked';
-if (fs.existsSync(unpackedDir) && !fs.existsSync(backupUnpackedDir)) {
-  fs.cpSync(unpackedDir, backupUnpackedDir, { recursive: true });
-  log('Backup unpacked copied:', backupUnpackedDir);
-}
 
 // Extract asar to workDir
 fs.rmSync(workDir, { recursive: true, force: true });
@@ -200,16 +266,18 @@ function parseDict(text, start, end) {
   return out;
 }
 
-// Find locale map: g={"zh-CN":p,"en-US":m} or similar
-const mapRegex = /g=\{(?:"zh-CN":([a-zA-Z0-9_$]+),"en-US":([a-zA-Z0-9_$]+)|"en-US":([a-zA-Z0-9_$]+),"zh-CN":([a-zA-Z0-9_$]+))\}/;
+// Find locale map: g={"zh-CN":p,"en-US":m} or similar.
+// The minifier renames the map variable and helper calls between ZCode releases.
+const mapRegex = /([a-zA-Z_$][a-zA-Z0-9_$]*)=\{(?:"zh-CN":([a-zA-Z0-9_$]+),"en-US":([a-zA-Z0-9_$]+)|"en-US":([a-zA-Z0-9_$]+),"zh-CN":([a-zA-Z0-9_$]+))\}/;
 const mapMatch = src.match(mapRegex);
 if (!mapMatch) {
-  throw new Error('Locale map pattern (g={"zh-CN":..., "en-US":...}) not found in ' + intlName);
+  throw new Error('Locale map pattern ("zh-CN"/"en-US") not found in ' + intlName);
 }
 
-const zhVar = mapMatch[1] || mapMatch[4];
-const enVar = mapMatch[2] || mapMatch[3];
-log('Detected locale variables: zh-CN=' + zhVar + ', en-US=' + enVar);
+const mapVar = mapMatch[1];
+const zhVar = mapMatch[2] || mapMatch[5];
+const enVar = mapMatch[3] || mapMatch[4];
+log('Detected locale map: ' + mapVar + ' (zh-CN=' + zhVar + ', en-US=' + enVar + ')');
 
 const enRange = findObj(src, enVar);
 const enDict = parseDict(src, ...enRange);
@@ -244,58 +312,83 @@ for (const k of enKeys) {
 
 log('Translated keys:', translatedCount, '| English fallbacks:', fallbackCount);
 
-const targetMap = mapMatch[0];
-const replacementMap = targetMap.includes('"zh-CN":' + zhVar + ',"en-US":' + enVar)
-  ? 'g={"zh-CN":' + zhVar + ',"en-US":R}'
-  : 'g={"en-US":R,"zh-CN":' + zhVar + '}';
-
-// Inject R dictionary before the map
-const patternBefore = '},h=n(),' + targetMap;
-if (src.includes(patternBefore)) {
-  const injected = '},R={' + entries.join(',') + '},h=n(),' + replacementMap;
-  src = src.split(patternBefore).join(injected);
-} else {
-  // Generic injection before targetMap
-  const injected = ',R={' + entries.join(',') + '},' + replacementMap;
-  src = src.split(targetMap).join(injected);
-}
+// Replace the existing en-US object in place. Older builds allowed injecting
+// a new R variable into the surrounding minified declaration. In 3.14 the
+// declaration changed from `h=n(),g=...` to `h=r(),g=...`; the old fallback
+// produced `h=r(),,R=...` and made the renderer syntactically invalid.
+const replacement = '{' + entries.join(',') + '}';
+src = src.slice(0, enRange[0]) + replacement + src.slice(enRange[1] + 1);
 
 // Safety validations
-if (!src.includes('en-US":R') && !src.includes('en-US": R')) {
-  throw new Error('Validation failed: replacementMap was not injected');
+if (!src.includes(mapMatch[0])) {
+  throw new Error('Validation failed: locale map was changed unexpectedly');
 }
 if (!src.includes('"settings.locale.en-US":`Русский`')) {
   throw new Error('Validation failed: Russian language label not found');
 }
 
+// Validate the generated JavaScript before touching app.asar.
 fs.writeFileSync(intlPath, src);
+try {
+  execFileSync(process.execPath, ['--check', intlPath], { stdio: 'pipe' });
+} catch (err) {
+  const detail = err?.stderr?.toString()?.trim() || err?.message || 'unknown syntax error';
+  throw new Error('Validation failed: generated IntlProvider is invalid: ' + detail);
+}
+
+// Create or refresh backups only after the candidate JavaScript has passed validation.
+if (fs.existsSync(backupPath)) {
+  const currentHash = sha256File(asarPath);
+  const backupHash = sha256File(backupPath);
+  if (currentHash !== backupHash) {
+    const previousBackup = uniquePath(backupPath + '.' + backupHash.slice(0, 12));
+    fs.renameSync(backupPath, previousBackup);
+    if (fs.existsSync(backupUnpackedDir)) {
+      fs.renameSync(backupUnpackedDir, uniquePath(backupUnpackedDir + '.' + backupHash.slice(0, 12)));
+    }
+    fs.copyFileSync(asarPath, backupPath);
+    log('Rotated stale backup:', previousBackup);
+  }
+}
+if (!fs.existsSync(backupPath)) {
+  fs.copyFileSync(asarPath, backupPath);
+  log('Created backup:', backupPath);
+}
+if (fs.existsSync(unpackedDir) && !fs.existsSync(backupUnpackedDir)) {
+  fs.cpSync(unpackedDir, backupUnpackedDir, { recursive: true });
+  log('Backup unpacked copied:', backupUnpackedDir);
+}
+
 log('Patched', intlName, 'successfully. New size:', src.length, 'bytes');
 
-// Pack back into app.asar
-log('Repacking app.asar...');
-execFileSync(process.execPath, [asarBin, 'pack', workDir, asarPath], { stdio: 'pipe' });
-log('Repacked to:', asarPath);
-
-// Cleanup work directory
-fs.rmSync(workDir, { recursive: true, force: true });
-log('Cleaned up temp directory.');
-
-// Update setting.json to en-US
+// Pack to a temporary archive and verify it before replacing app.asar.
+const packedPath = asarPath + '.zcode-ru.tmp';
+const packedUnpackedPath = packedPath + '.unpacked';
 try {
-  const settingsPath = path.join(process.env.USERPROFILE || 'C:\\Users\\Administrator', '.zcode', 'v2', 'setting.json');
-  if (fs.existsSync(settingsPath)) {
-    const raw = fs.readFileSync(settingsPath, 'utf8');
-    const settings = JSON.parse(raw);
-    let changed = false;
-    if (settings.locale !== 'en-US') { settings.locale = 'en-US'; changed = true; }
-    if (settings.localePreference !== 'en-US') { settings.localePreference = 'en-US'; changed = true; }
-    if (changed) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
-      log('Updated setting.json to en-US (Russian locale mapped).');
-    }
+  fs.rmSync(packedPath, { force: true });
+  fs.rmSync(packedUnpackedPath, { recursive: true, force: true });
+  const originalUnpackedPaths = collectUnpackedPaths(asar.getRawHeader(asarPath).header);
+  log('Preserving unpacked entries:', originalUnpackedPaths.length);
+  log('Repacking app.asar...');
+  const streams = buildPackageStreams(workDir, new Set(originalUnpackedPaths));
+  await asar.createPackageFromStreams(packedPath, streams);
+  const packedUnpackedPaths = collectUnpackedPaths(asar.getRawHeader(packedPath).header);
+  const missingUnpacked = originalUnpackedPaths.filter(p => !packedUnpackedPaths.includes(p));
+  if (missingUnpacked.length) {
+    throw new Error('Validation failed: unpacked entries were lost: ' + missingUnpacked.join(', '));
   }
-} catch (e) {
-  log('Note: setting.json update warning:', e.message);
+  const packedEntry = path.join('out', 'renderer', 'assets', intlName);
+  const packedSource = asar.extractFile(packedPath, packedEntry).toString('utf8');
+  if (!packedSource.includes('"settings.locale.en-US":`Русский`')) {
+    throw new Error('Validation failed: packed IntlProvider does not contain Russian locale label');
+  }
+  fs.copyFileSync(packedPath, asarPath);
+  log('Repacked to:', asarPath);
+} finally {
+  fs.rmSync(packedPath, { force: true });
+  fs.rmSync(packedUnpackedPath, { recursive: true, force: true });
+  fs.rmSync(workDir, { recursive: true, force: true });
+  log('Cleaned up temp files.');
 }
 
 log('PATCH OK — ZCode localized to Russian on en-US base.');

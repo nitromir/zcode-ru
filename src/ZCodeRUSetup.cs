@@ -76,7 +76,7 @@ namespace ZCodeRUSetup
                 return;
             }
 
-            bool success = InstallerEngine.Install(installDir, true, true, true, delegate(string s) {});
+            bool success = InstallerEngine.Install(installDir, delegate(string s) {});
             Environment.Exit(success ? 0 : 1);
         }
     }
@@ -86,9 +86,7 @@ namespace ZCodeRUSetup
         private TextBox txtPath;
         private Button btnBrowse;
         private Label lblStatusDetect;
-        private CheckBox chkAutoPatch;
         private CheckBox chkBackup;
-        private CheckBox chkSetLocale;
         private Button btnInstall;
         private Button btnRevert;
         private Button btnCheck;
@@ -104,7 +102,7 @@ namespace ZCodeRUSetup
 
         private void InitializeComponent()
         {
-            this.Text = "Русификатор ZCode — Установка и автозащита";
+            this.Text = "Русификатор ZCode — установка";
             this.Size = new Size(720, 580);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -126,7 +124,7 @@ namespace ZCodeRUSetup
             lblTitle.AutoSize = true;
 
             Label lblSubtitle = new Label();
-            lblSubtitle.Text = "Версии 3.10.x / 3.9.x • База en-US (без иероглифов) • Автовосстановление при обновлениях";
+            lblSubtitle.Text = "Версия 3.14.x • База en-US • Резервная копия и безопасная проверка";
             lblSubtitle.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
             lblSubtitle.ForeColor = Color.FromArgb(139, 148, 158);
             lblSubtitle.Location = new Point(21, 40);
@@ -177,34 +175,18 @@ namespace ZCodeRUSetup
             GroupBox grpOptions = new GroupBox();
             grpOptions.Text = " Параметры русификации ";
             grpOptions.Location = new Point(0, 95);
-            grpOptions.Size = new Size(668, 88);
+            grpOptions.Size = new Size(668, 52);
             grpOptions.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             grpOptions.ForeColor = Color.FromArgb(36, 41, 47);
 
-            chkAutoPatch = new CheckBox();
-            chkAutoPatch.Text = "Автоматически восстанавливать русификацию при обновлениях ZCode и перезагрузке Windows";
-            chkAutoPatch.Location = new Point(15, 22);
-            chkAutoPatch.AutoSize = true;
-            chkAutoPatch.Checked = true;
-            chkAutoPatch.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            chkAutoPatch.ForeColor = Color.FromArgb(9, 105, 218);
-
-            chkSetLocale = new CheckBox();
-            chkSetLocale.Text = "Переключить язык интерфейса на Русский (en-US base, без китайских остатков)";
-            chkSetLocale.Location = new Point(15, 43);
-            chkSetLocale.AutoSize = true;
-            chkSetLocale.Checked = true;
-            chkSetLocale.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
-
             chkBackup = new CheckBox();
             chkBackup.Text = "Создать резервную копию оригинального пакета (app.asar.original)";
-            chkBackup.Location = new Point(15, 64);
+            chkBackup.Location = new Point(15, 22);
             chkBackup.AutoSize = true;
             chkBackup.Checked = true;
+            chkBackup.Enabled = false;
             chkBackup.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
 
-            grpOptions.Controls.Add(chkAutoPatch);
-            grpOptions.Controls.Add(chkSetLocale);
             grpOptions.Controls.Add(chkBackup);
             mainPanel.Controls.Add(grpOptions);
 
@@ -377,9 +359,6 @@ namespace ZCodeRUSetup
             btnCheck.Enabled = !busy;
             btnBrowse.Enabled = !busy;
             txtPath.Enabled = !busy;
-            chkAutoPatch.Enabled = !busy;
-            chkBackup.Enabled = !busy;
-            chkSetLocale.Enabled = !busy;
             progressBar.Style = busy ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
             if (!busy) progressBar.Value = 0;
         }
@@ -392,17 +371,10 @@ namespace ZCodeRUSetup
             SetUIBusy(true);
             AppendLog("\n--- Начало установки русификатора ---", Color.Black);
 
-            bool autoPatch = chkAutoPatch.Checked;
-            bool backup = chkBackup.Checked;
-            bool locale = chkSetLocale.Checked;
-
             Thread t = new Thread(delegate()
             {
                 bool ok = InstallerEngine.Install(
                     targetDir,
-                    autoPatch,
-                    backup,
-                    locale,
                     delegate(string msg) { AppendLog(msg, Color.FromArgb(36, 41, 47)); }
                 );
 
@@ -412,7 +384,7 @@ namespace ZCodeRUSetup
                     if (ok)
                     {
                         AppendLog("✔ Установка успешно завершена! ZCode готов к использованию на русском языке.", Color.FromArgb(46, 160, 67));
-                        MessageBox.Show("Русификатор успешно установлен!\n\nАвтозащита настроена: при любых обновлениях ZCode перевод сохранится автоматически.", "Успешно", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("Русификатор успешно установлен!\n\nОткройте Settings -> Language и выберите English (подпись переведена как «Русский»).", "Успешно", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {
@@ -430,7 +402,7 @@ namespace ZCodeRUSetup
             string targetDir = txtPath.Text.Trim();
             if (!ValidatePath()) return;
 
-            if (MessageBox.Show("Восстановить оригинальный файл app.asar и удалить автоматическую защиту?", "Подтверждение", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (MessageBox.Show("Восстановить оригинальный файл app.asar?", "Подтверждение", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
 
             SetUIBusy(true);
@@ -464,11 +436,9 @@ namespace ZCodeRUSetup
 
             AppendLog("\n--- Проверка состояния ---", Color.Black);
             bool isPatched = InstallerEngine.CheckPatched(targetDir);
-            bool isTaskActive = InstallerEngine.CheckScheduledTask();
 
             AppendLog("Папка ZCode: " + targetDir, Color.Black);
             AppendLog("Статус русификации (RU en-US): " + (isPatched ? "✔ Установлен" : "❌ Не установлен"), isPatched ? Color.FromArgb(46, 160, 67) : Color.Red);
-            AppendLog("Автозащита при обновлениях (Планировщик): " + (isTaskActive ? "✔ Активна (ZCodeAutoPatcher)" : "❌ Не настроена"), isTaskActive ? Color.FromArgb(46, 160, 67) : Color.Orange);
         }
 
         private void LaunchZCode()
@@ -546,13 +516,6 @@ namespace ZCodeRUSetup
             return exitCode == 0;
         }
 
-        public static bool CheckScheduledTask()
-        {
-            string stdout, stderr;
-            int exitCode = RunProcess("schtasks.exe", "/query /tn \"ZCodeAutoPatcher\"", out stdout, out stderr);
-            return exitCode == 0;
-        }
-
         public static string GetToolsDir()
         {
             string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -611,38 +574,25 @@ namespace ZCodeRUSetup
             }
         }
 
-        public static bool Install(string installDir, bool setupAutoPatch, bool createBackup, bool updateLocale, Action<string> log)
+        public static bool Install(string installDir, Action<string> log)
         {
             try
             {
                 string toolsDir = GetToolsDir();
 
-                // 1. Close running ZCode
-                try
+                // 1. Require the user to close ZCode; never terminate processes.
+                Process[] procs = Process.GetProcessesByName("ZCode");
+                if (procs.Length > 0)
                 {
-                    Process[] procs = Process.GetProcessesByName("ZCode");
-                    if (procs.Length > 0)
-                    {
-                        log("Закрытие активных процессов ZCode...");
-                        foreach (Process p in procs)
-                        {
-                            try { p.Kill(); p.WaitForExit(3000); } catch {}
-                        }
-                        Thread.Sleep(1500);
-                    }
+                    log("Закройте ZCode полностью и запустите установку снова.");
+                    return false;
                 }
-                catch {}
 
                 // 2. Extract payload
                 if (!ExtractPayload(toolsDir, log))
                     return false;
 
-                // 3. Grant directory permissions if in ProgramFiles
-                log("Проверка прав доступа к каталогу ZCode...");
-                string dummyOut, dummyErr;
-                RunProcess("icacls.exe", "\"" + installDir + "\" /grant \"Users:(OI)(CI)F\" /T", out dummyOut, out dummyErr);
-
-                // 4. Run patch.mjs
+                // 3. Run patch.mjs
                 log("Применение языкового патча на базе en-US (с защитой от китайских остатков)...");
                 string patchMjs = Path.Combine(toolsDir, "patch.mjs");
                 string dictPath = Path.Combine(toolsDir, "ru.json");
@@ -663,49 +613,7 @@ namespace ZCodeRUSetup
                     return false;
                 }
 
-                // 5. Update setting.json
-                if (updateLocale)
-                {
-                    log("Обновление настроек языка интерфейса (en-US -> Русский)...");
-                    string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                    string settingsPath = Path.Combine(userProfile, ".zcode", "v2", "setting.json");
-                    if (File.Exists(settingsPath))
-                    {
-                        string content = File.ReadAllText(settingsPath, Encoding.UTF8);
-                        content = Regex.Replace(content, "\"locale\"\\s*:\\s*\"[^\"]+\"", "\"locale\": \"en-US\"");
-                        content = Regex.Replace(content, "\"localePreference\"\\s*:\\s*\"[^\"]+\"", "\"localePreference\": \"en-US\"");
-                        File.WriteAllText(settingsPath, content, Encoding.UTF8);
-                        log("Настройки ZCode обновлены.");
-                    }
-                }
-
-                // 6. Setup AutoPatch Scheduled Task
-                if (setupAutoPatch)
-                {
-                    log("Настройка системного сторожевого задания (Планировщик Windows)...");
-                    string autoPatchScript = Path.Combine(toolsDir, "zcode-autopatch.ps1");
-                    
-                    string psCommand = string.Format(
-                        "$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File \"{0}\" -Silent'; " +
-                        "$t1 = New-ScheduledTaskTrigger -AtLogOn; " +
-                        "$t2 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15); " +
-                        "$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest; " +
-                        "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; " +
-                        "Register-ScheduledTask -TaskName 'ZCodeAutoPatcher' -Action $action -Trigger @($t1, $t2) -Principal $principal -Settings $settings -Force",
-                        autoPatchScript
-                    );
-
-                    string taskOut, taskErr;
-                    int taskCode = RunProcess("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command \"" + psCommand + "\"", out taskOut, out taskErr);
-                    if (taskCode == 0)
-                    {
-                        log("Автозащита ZCodeAutoPatcher успешно зарегистрирована в Планировщике Windows.");
-                    }
-                    else
-                    {
-                        log("Предупреждение при регистрации задачи: " + taskErr);
-                    }
-                }
+                log("Настройки ZCode не менялись. После запуска выберите Settings -> Language -> English.");
 
                 return true;
             }
@@ -731,10 +639,6 @@ namespace ZCodeRUSetup
                     log("Ошибка восстановления: " + stderr);
                     return false;
                 }
-
-                log("Удаление задания автозащиты из Планировщика...");
-                string dummyOut, dummyErr;
-                RunProcess("schtasks.exe", "/delete /tn \"ZCodeAutoPatcher\" /f", out dummyOut, out dummyErr);
 
                 log("Оригинальный пакет успешно восстановлен.");
                 return true;
