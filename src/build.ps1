@@ -32,7 +32,7 @@ try {
   if (Test-Path $payloadZip) { Remove-Item $payloadZip -Force }
 
   Write-Host "Creating payload zip..."
-  $filesToPack = @("ru.json", "patch.mjs", "patch-zcode-language.ps1", "providers.config.example.json", "package.json", "package-lock.json", "node_modules")
+  $filesToPack = @("ru.json", "patch.mjs", "patch-zcode-language.ps1", "providers.config.example.json", "TRANSLATION_MAINTENANCE.md", "package.json", "package-lock.json", "node_modules")
   & $sevenZip a -tzip $payloadZip $filesToPack -r | Out-Null
 
   # 3. Compile C# GUI executable
